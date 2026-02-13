@@ -120,17 +120,6 @@ setwd(arguments$output);
 # create minimal tables for overlap
 keep.fields <- c('Tumor_Sample_Barcode','Matched_Norm_Sample_Barcode','Chromosome','Start_Position','End_Position','Reference_Allele','Tumor_Seq_Allele2','Variant_Type');
 
-# remove duplicate entries from Mutect2
-if ('MuTect2' %in% names(mutation.data)) {
-	orig.fields <- colnames(mutation.data[['MuTect2']]);
-	mutation.data[['MuTect2']]$t_vaf <- mutation.data[['MuTect2']]$t_alt_count / mutation.data[['MuTect2']]$t_depth;
-	mutation.data[['MuTect2']] <- mutation.data[['MuTect2']][order(mutation.data[['MuTect2']]$t_vaf, decreasing = TRUE),];
-	mutation.data[['MuTect2']] <- mutation.data[['MuTect2']][!duplicated(mutation.data[['MuTect2']][,keep.fields]),];
-	mutation.data[['MuTect2']] <- mutation.data[['MuTect2']][,orig.fields];
-	rm(orig.fields);
-	}
-
-# extract all unique variants
 combined.data <- data.frame();
 
 for (tool in names(mutation.data)) {
@@ -293,7 +282,7 @@ if (any(na.omit(vaf) < 0.05)) {
 if (any(as.numeric(annotated.data$t_depth) < t_depth)) {
 	annotated.data[which(as.numeric(annotated.data$t_depth) < t_depth),]$FLAG.low_coverage <- TRUE;
 	}
-if (!all(is.na(annotated.data$n_depth)) & (any(as.numeric(annotated.data$n_depth) < n_depth))) {
+if (!all(is.na(annotated.data$n_depth)) & (any(as.numeric(na.omit(annotated.data$n_depth)) < n_depth))) {
 	annotated.data[which(as.numeric(annotated.data$n_depth) < n_depth),]$FLAG.low_coverage <- TRUE;
 	}
 

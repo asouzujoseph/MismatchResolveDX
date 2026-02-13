@@ -1,7 +1,5 @@
-### compareVariantFragmentSizes.R ##################################################################
-# Wrapper script to compare variant fragment size on a single sample.
-# This function loads a processed BAM file, subsets reads to target positions, annotated each read
-# 	as REF or ALT, performs summary statisitcs for each variant and outputs visualizations.
+### runPanelMSI.R ##################################################################################
+# Script to compare microsatellite sites between tumour and normal (or PoN).
 
 # Example:
 # step 1 (find_ms): find microsatellite sites within target regions

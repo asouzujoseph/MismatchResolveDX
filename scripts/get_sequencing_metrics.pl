@@ -17,7 +17,7 @@ use IO::Handle;
 my $cwd = dirname(__FILE__);
 require "$cwd/utilities.pl";
 
-our ($reference, $dictionary, $gnomad, $gatk_v4);
+our ($reference, $dictionary);
 
 ####################################################################################################
 # version	author		comment
@@ -213,65 +213,6 @@ sub get_gc_bias_command {
 	return($qc_command);
 	}
 
-# format command for GetPileupSummaries
-sub get_pileup_command {
-	my %args = (
-		input		=> undef,
-		output		=> undef,
-		tmp_dir		=> undef,
-		intervals	=> undef,
-		@_
-		);
-
-	my $qc_command = join(' ',
-		'gatk GetPileupSummaries',
-		'--input', $args{input},
-		'--output', $args{output},
-		'--tmp-dir', $args{tmp_dir},
-		'--reference', $reference,
-		'--variant', $gnomad
-		);
-
-	if (defined($args{intervals})) {
-		$qc_command .= " --intervals $args{intervals}";
-		}
-
-	$qc_command .= "\n\nmd5sum $args{output} > $args{output}.md5";
-
-	return($qc_command);
-	}
-
-# format command to estimate contamination
-sub get_estimate_contamination_command {
-	my %args = (
-		tumour		=> undef,
-		normal		=> undef,
-		output		=> undef,
-		tmp_dir		=> undef,
-		intervals	=> undef,
-		@_
-		);
-
-	my $qc_command = join(' ',
-		'gatk CalculateContamination',
-		'--input', $args{tumour},
-		'--output', $args{output},
-		'--tmp-dir', $args{tmp_dir}
-		);
-
-	if (defined($args{normal})) {
-		$qc_command .= " --matched-normal $args{normal}";
-		}
-
-	if (defined($args{intervals})) {
-		$qc_command .= " --intervals $args{intervals}";
-		}
-
-	$qc_command .= "\n\nmd5sum $args{output} > $args{output}.md5";
-
-	return($qc_command);
-	}
-
 ### MAIN ###########################################################################################
 sub main {
 	my %args = (
@@ -296,16 +237,6 @@ sub main {
 	# load tool config
 	my $tool_data_orig = LoadFile($tool_config);
 	my $tool_data = error_checking(tool_data => $tool_data_orig, pipeline => 'qc');
-
-	# confirm version
-	if ('emseq' ne $tool_data->{seq_type}) {
-		my $needed = version->declare('4.1')->numify;
-		my $given = version->declare($tool_data->{gatk_cnv_version})->numify;
-
-		if ($given < $needed) {
-			die("Incompatible GATK version requested! QC pipeline is currently only compatible with GATK >4.1");
-			}
-		}
 
 	# organize output and log directories
 	my $output_directory = $args{output_directory};
@@ -345,13 +276,6 @@ sub main {
 	$dictionary = $reference;
 	$dictionary =~ s/.fa/.dict/;
 
-	if (defined($tool_data->{gnomad})) {
-		$gnomad = $tool_data->{gnomad};
-		print $log "\n    gnomAD SNPs: $tool_data->{gnomad}";
-		} else {
-		die("No gnomAD file provided; please provide path to gnomAD VCF");
-		}
-
 	print $log "\n    Output directory: $output_directory";
 	print $log "\n  Sample config used: $data_config";
 	print $log "\n---\n";
@@ -368,7 +292,6 @@ sub main {
 	my @chroms = split(',', $string);
 
 	# set tools and versions
-	my $gatk	= 'gatk/' . $tool_data->{gatk_cnv_version};
 	my $picard	= 'picard/' . $tool_data->{picard_version};
 	my $r_version	= 'R/' . $tool_data->{r_version};
 
@@ -763,125 +686,6 @@ sub main {
 					}
 
 				push @final_outputs, $output_stem . '.txt';
-				}
-
-			## Collect contamination estimates
-			if ('Y' eq $tool_set{'contamination'}) {
-
-				my $pileup_out = join('/', $patient_directory, $sample . '_pileup.table');
-
-				my $pileup_command = get_pileup_command(
-					input		=> $smp_data->{$patient}->{$type}->{$sample},
-					output		=> $pileup_out,
-					intervals	=> $target_intervals,
-					tmp_dir		=> $tmp_directory
-					);
-
-				$cleanup_cmd .= "\nrm $pileup_out";
-
-				# check if this should be run
-				if ('Y' eq missing_file($pileup_out . '.md5')) {
-
-					# record command (in log directory) and then run job
-					print $log "  >> Submitting job for GetPileupSummaries...\n";
-
-					$run_script = write_script(
-						log_dir	=> $log_directory,
-						name	=> 'run_get_pileup_summaries_' . $sample,
-						cmd	=> $pileup_command,
-						modules	=> [$gatk],
-						max_time	=> $parameters->{qc}->{time},
-						mem		=> $parameters->{qc}->{mem},
-						hpc_driver	=> $args{hpc_driver},
-						extra_args	=> [$hpc_group]
-						);
-
-					$run_id = submit_job(
-						jobname		=> 'run_get_pileup_summaries_' . $sample,
-						shell_command	=> $run_script,
-						hpc_driver	=> $args{hpc_driver},
-						dry_run		=> $args{dry_run},
-						log_file	=> $log
-						);
-
-					push @pileup_jobs, $run_id;
-					push @patient_jobs, $run_id;
-					push @all_jobs, $run_id;
-					} else {
-					print $log "  >> Skipping GetPileupSummaries because this has already been completed!\n";
-					}
-				}
-			}
-
-		# now that all pileup jobs are submitted, 
-		# run calculate contamination on each T/N (or T-only or N-only) set
-		if ('Y' eq $tool_set{'contamination'}) {
-
-			print $log "\nRunning CalculateContamination steps...\n";
-
-			foreach my $sample (@sample_ids) {
-
-				# find contamination
-				my $tumour_pileup = join('/',
-					$patient_directory,
-					$sample . '_pileup.table'
-					);
-
-				my $normal_pileup = undef;
-				if (scalar(@normal_ids) > 0) {
-					if ( !(any { $_ =~ m/$sample/ } @normal_ids) ) {
-						$normal_pileup = join('/',
-							$patient_directory,
-							$normal_ids[0] . '_pileup.table'
-							);
-						}
-					}
-
-				my $contest_output = join('/',
-					$patient_directory,
-					$sample . '_contamination.table'
-					);
-
-				my $contest_command = get_estimate_contamination_command(
-					tumour		=> $tumour_pileup,
-					normal		=> $normal_pileup,
-					output		=> $contest_output,
-					tmp_dir		=> $tmp_directory
-					);
-
-				# check if this should be run
-				if ('Y' eq missing_file($contest_output . '.md5')) {
-
-					# record command (in log directory) and then run job
-					print $log ">> Submitting job for CalculateContamination...\n";
-
-					$run_script = write_script(
-						log_dir	=> $log_directory,
-						name	=> 'run_calculate_contamination_' . $sample,
-						cmd	=> $contest_command,
-						modules	=> [$gatk],
-						dependencies	=> join(':', @pileup_jobs),
-						max_time	=> ('Y' eq $tool_set{'wgs_metrics'}) ? '12:00:00' : '01:00:00',
-						mem		=> ('Y' eq $tool_set{'wgs_metrics'}) ? '4G' : '1G',
-						hpc_driver	=> $args{hpc_driver},
-						extra_args	=> [$hpc_group]
-						);
-
-					$run_id = submit_job(
-						jobname		=> 'run_calculate_contamination_' . $sample,
-						shell_command	=> $run_script,
-						hpc_driver	=> $args{hpc_driver},
-						dry_run		=> $args{dry_run},
-						log_file	=> $log
-						);
-
-					push @patient_jobs, $run_id;
-					push @all_jobs, $run_id;
-					} else {
-					print $log ">> Skipping CalculateContamination because this has already been completed!\n";
-					}
-
-				push @final_outputs, $contest_output;
 				print $log "  >> Processing SAMPLE: $sample complete!\n";
 				}
 			}

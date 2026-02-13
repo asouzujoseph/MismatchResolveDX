@@ -102,11 +102,8 @@ sub run_report_pipeline {
 	my $command = join(' ',
 		"perl $cwd/scripts/report/make_multimmr_reports.pl",
 		"--wgs_tool", $args{wgs_tool},
-		"--wgs_data", $args{wgs_data},
 		"--dna_tool", $args{dna_tool},
-		"--dna_data", $args{dna_data},
 		"--em_tool", $args{em_tool},
-		"--em_data", $args{em_data},
 		"--output_directory", $args{report_dir},
 		"-c", $args{cluster}
 		);

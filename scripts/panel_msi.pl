@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-### multimmr_msi.pl ################################################################################
+### panel_msi.pl ################################################################################
 use AutoLoader 'AUTOLOAD';
 use strict;
 use warnings;
@@ -17,14 +17,14 @@ use IO::Handle;
 my $cwd = dirname(__FILE__);
 require "$cwd/utilities.pl";
 
-our ($reference, $ref_type, $pon);
+our ($ref_type, $pon);
 
 ####################################################################################################
 # version	author		comment
 # 1.0		sprokopec	script to run simple MSI classifier for MultiMMR
 
 ### USAGE ##########################################################################################
-# multimmr_msi.pl -t tool.yaml -d data.yaml -o /path/to/output/dir -c slurm --remove --dry_run
+# panel_msi.pl -t tool.yaml -d data.yaml -o /path/to/output/dir -c slurm --remove --dry_run
 #
 # where:
 # 	-t (tool.yaml) contains tool versions and parameters, reference information, etc.
@@ -55,7 +55,8 @@ sub get_msi_command {
 		"Rscript $cwd/runPanelMSI.R",
 		"--step", $args{step},
 		"--targets", $args{intervals},
-		"--output", $args{output_file}
+		"--output", $args{output_file},
+		"--ref_type", $ref_type
 		);
 
 	if (defined($args{bam})) {
@@ -136,7 +137,6 @@ sub main {
 	print $log "---\n";
 	print $log "Running panelMSI pipeline.\n";
 	print $log "\n  Tool config used: $args{tool_config}";
-	print $log "\n    Reference used: $tool_data->{reference}";
 
 	$ref_type  = $tool_data->{ref_type};
 
@@ -383,7 +383,7 @@ sub main {
 			unless(-e $sample_directory) { make_path($sample_directory); }
 
 			# find input bam
-			my $bam = basename($smp_data->{$patient}->{tumour}->{$sample});
+			my $bam = $smp_data->{$patient}->{tumour}->{$sample};
 			$link = join('/', $link_directory, basename($bam));
 			symlink($bam, $link);
 

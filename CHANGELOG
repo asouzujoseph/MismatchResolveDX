@@ -1,1 +1,14 @@
+2026-02-13: MismatchResolveDx (version 1.0.1);
+ - panel_msi.pl: fixed an error when creating symlinks to tumour bams + code cleanup
+ - collect_panelMSI_output.R: added classification based on pre-determined threshold
+ - pindel.pl: fixed a bug in cleanup step
+ - gatk.pl: removed code for RNA-Seq; added compatibility for GATK4
+ - pughlab_dnaseq_pipeline.pl: cleaning up unnecessary code from PughLab pipeline-suite
+ - get_sequencing_metrics.pl: cleaning up unnecessary code from PughLab pipeline-suite
+ - runPanelMSI.R: minor code cleanup
+ - run_panelCN_mops.R: minor code cleanup
+ - format_ensemble_mutations.R: minor code cleanup
+ - pughlab_multimmr_pipeline.pl: minor code cleanup
+
+
 Modified from: PughLab pipeline-suite (version 0.9.22);

@@ -464,6 +464,9 @@ sub main {
 			next;
 			}
 
+		# initiate patient-specific objects
+		$cleanup_cmd = '';
+
 		# create some directories
 		my $patient_directory = join('/', $output_directory, $patient);
 		unless(-e $patient_directory) { make_path($patient_directory); }
@@ -528,7 +531,7 @@ sub main {
 			unless(-e $tmp_directory) { make_path($tmp_directory); }
 
 			# indicate this should be removed at the end
-			$cleanup_cmd .= "rm -rf $tmp_directory;\n";
+			$cleanup_cmd .= "\n  rm -rf $tmp_directory";
 
 			# generate necessary samples.tsv
 			my $sample_sheet = join('/', $sample_directory, 'pindel_config.txt');
@@ -840,7 +843,7 @@ sub main {
 			# make sure final output exists before removing intermediate files!
 			$cleanup_cmd = join("\n",
 				"if [ -s " . join(" ] && [ -s ", @final_outputs) . " ]; then",
-				"  $cleanup_cmd",
+				"$cleanup_cmd",
 				"else",
 				'  echo "One or more FINAL OUTPUT FILES is missing; not removing intermediates"',
 				"fi"

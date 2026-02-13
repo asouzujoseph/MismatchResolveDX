@@ -1,5 +1,4 @@
 ## Copy-Number calling of targeted panel DNA-seq data using panelcn.mops
-# Jeff Bruce - jeffpbruce@gmail.com
 # Script to take in a set of test bams and reference ('normal') bams along
 # with a target bed file and output figures and copy-number calls
 

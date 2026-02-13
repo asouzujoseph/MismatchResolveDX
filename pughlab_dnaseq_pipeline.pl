@@ -94,7 +94,7 @@ sub main {
 	my ($run_script, $fastqc_run_id, $trim_run_id);
 	my ($bwa_run_id, $gatk_run_id, $qc_run_id, $hc_run_id);
 	my ($mutect2_run_id, $msi_run_id, $pindel_run_id, $delly_run_id, $vardict_run_id, $novobreak_run_id);
-	my ($somaticsniper_run_id, $mops_run_id, $ichor_run_id, $mavis_run_id);
+	my ($somaticsniper_run_id, $mops_run_id, $ichor_run_id, $mavis_run_id, $report_run_id);
 
 	my (@step1_job_ids, @step2_job_ids, @step3_job_ids, @step4_job_ids, @job_ids);
 	my $current_dependencies = '';
@@ -127,7 +127,7 @@ sub main {
 		'haplotype_caller' => defined($tool_data->{haplotype_caller}->{run}) ? $tool_data->{haplotype_caller}->{run} : 'N',
 		'mutect2'	=> defined($tool_data->{mutect2}->{run}) ? $tool_data->{mutect2}->{run} : 'N',
 		'somaticsniper' => defined($tool_data->{somaticsniper}->{run}) ? $tool_data->{somaticsniper}->{run} : 'N',
-		'varscan'	=> defined($tool_data->{varscan}->{run}) ? $tool_data->{varscan}->{run} : 'N',
+		'vardict'	=> defined($tool_data->{vardict}->{run}) ? $tool_data->{vardict}->{run} : 'N',
 		'pindel'	=> defined($tool_data->{pindel}->{run}) ? $tool_data->{pindel}->{run} : 'N',
 		'novobreak'	=> defined($tool_data->{novobreak}->{run}) ? $tool_data->{novobreak}->{run} : 'N',
 		'ichor_cna'	=> defined($tool_data->{ichor_cna}->{run}) ? $tool_data->{ichor_cna}->{run} : 'N',
@@ -152,11 +152,6 @@ sub main {
 	if ( (!$args{step1}) ) {
 		$gatk_output_yaml = $data_config;
 		}
-
-#	if ( (!$args{step4}) && ($args{step5}) ) {
-#		print $log "Can not make final report without summarizing output; setting --summarize to true";
-#		$args{step4} = 1;
-#		}
 
 	# Should pre-processing (adapter trimming/alignment/GATK processing/QC) be performed?
 	if ($args{step1}) {
@@ -389,8 +384,7 @@ sub main {
 		$current_dependencies = '';
 		}
 
-	## run GATK's CalculateContamination and DepthOfCoverage
-	## also collect alignment metrics, and calculate callable Bases
+	# Collect alignment metrics, and calculate callable Bases
 	if ($args{step2}) {
 
 		unless(-e $qc_directory) { make_path($qc_directory); }
@@ -1088,7 +1082,7 @@ sub main {
 				name	=> 'pughlab_dna_pipeline__run_novobreak',
 				cmd	=> $novobreak_command,
 				modules	=> [$perl],
-				dependencies	=> join(':', $current_dependencies, $vardict_run_id),
+				dependencies	=> $current_dependencies,
 				mem		=> '256M',
 				max_time	=> $max_time,
 				extra_args	=> [$hpc_group],
@@ -1257,53 +1251,6 @@ sub main {
 			}
 		}
 
-	########################################################################################
-	# Create a final report for the project.
-	########################################################################################
-	if ($args{step4}) {
-
-		my $report_command = join(' ',
-			"perl $cwd/scripts/pughlab_pipeline_auto_report.pl",
-			"-t", $tool_config,
-			"-c", $args{cluster},
-			"-d", $gatk_output_yaml
-			);
-
-		if ($args{step5}) {
-			$report_command .= " --create_report";
-			}
-
-		# record command (in log directory) and then run job
-		print $log "Submitting job for pughlab_pipeline_auto_report.pl\n";
-		print $log "  COMMAND: $report_command\n\n";
-
-		$run_script = write_script(
-			log_dir	=> $log_directory,
-			name	=> 'pughlab_dna_pipeline__summarize_output',
-			cmd	=> $report_command,
-			modules	=> [$perl],
-			dependencies	=> join(':', @step2_job_ids, @step3_job_ids),
-			mem		=> '256M',
-			max_time	=> '5-00:00:00',
-			extra_args	=> [$hpc_group],
-			hpc_driver	=> $args{cluster}
-			);
-
-		if ($args{dry_run}) {
-			$report_run_id = 'pughlab_dna_pipeline__summarize_output';
-			} else {
-			$report_run_id = submit_job(
-				jobname		=> $log_directory,
-				shell_command	=> $run_script,
-				hpc_driver	=> $args{cluster},
-				dry_run		=> $args{dry_run},
-				log_file	=> $log
-				);
-
-			print $log ">>> Report job id: $report_run_id\n\n";
-			}
-		}
-
 	# finish up
 	print $log "\nProgramming terminated successfully.\n\n";
 	close $log;
@@ -1313,7 +1260,7 @@ sub main {
 ### GETOPTS AND DEFAULT VALUES #####################################################################
 # declare variables
 my ($tool_config, $data_config);
-my ($preprocessing, $qc, $variant_calling, $summarize, $create_report);
+my ($preprocessing, $qc, $variant_calling);
 my $hpc_driver = 'slurm';
 my ($remove_junk, $dry_run);
 my $help;
@@ -1326,8 +1273,6 @@ GetOptions(
 	'preprocessing'		=> \$preprocessing,
 	'qc'			=> \$qc,
 	'variant_calling'	=> \$variant_calling,
-	'summarize'		=> \$summarize,
-	'create_report'		=> \$create_report,
 	'c|cluster=s'		=> \$hpc_driver,
 	'remove'		=> \$remove_junk,
 	'dry-run'		=> \$dry_run
@@ -1342,8 +1287,6 @@ if ($help) {
 		"\t--preprocessing\t<boolean> should data pre-processing be performed? (default: false)",
 		"\t--qc\t<boolean> should QC metrics be generated on the BAMs? (default: false)",
 		"\t--variant_calling\t<boolean> should variant calling be performed? (default: false)",
-		"\t--summarize\t<boolean> should output be summarized? (default: false)",
-		"\t--create_report\t<boolean> should a report be generated? (default: false)",
 		"\t--cluster|-c\t<string> cluster scheduler (default: slurm)",
 		"\t--remove\t<boolean> should intermediates be removed? (default: false)",
 		"\t--dry-run\t<boolean> should jobs be submitted? (default: false)"
@@ -1353,8 +1296,8 @@ if ($help) {
 	exit;
 	}
 
-if ( (!$preprocessing) && (!$variant_calling) && (!$summarize) && (!$qc) && (!$create_report) ) {
-	die("Please choose a step to run (at least one of --preprocessing, --qc, --variant_calling, --summarize, --create_report )");
+if ( (!$preprocessing) && (!$variant_calling) && (!$qc) ) {
+	die("Please choose a step to run (at least one of --preprocessing, --qc, --variant_calling)");
 	}
 if (!defined($tool_config)) {
 	die("No tool config file defined; please provide -t | --tool (ie, tool_config.yaml)");
@@ -1376,8 +1319,6 @@ main(
 	step1		=> $preprocessing,
 	step2		=> $qc,
 	step3		=> $variant_calling,
-	step4		=> $summarize,
-	step5		=> $create_report,
 	cluster		=> $hpc_driver,
 	cleanup		=> $remove_junk,
 	dry_run		=> $dry_run

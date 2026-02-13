@@ -80,8 +80,13 @@ summarized.results <- data.frame(
 	N.regions = apply(msi.list[,all.samples],2,function(i) length(na.omit(i))),
 	N.positive = apply(msi.list[,all.samples],2,function(i) length(i[which(i < 0.01)]) ),
 	Proportion = apply(msi.list[,all.samples],2,function(i) length(i[which(i < 0.01)]) / 
-		length(na.omit(i)) )
+		length(na.omit(i)) ),
+	Status = NA
 	);
+
+summarized.results$Status <- sapply(summarized.results$Proportion, function(i) { 
+	ifelse (is.na(i), NA, ifelse(i < 0.2, 'MSS', 'MSI'));
+	});
 
 # save combined/formatted data to file
 write.table(
